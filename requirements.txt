@@ -1,0 +1,7 @@
+crewai>=0.28.8
+langchain-community>=0.0.38
+pydantic>=2.5.0
+python-dotenv>=1.0.1
+fastapi
+litellm[proxy]==1.50.0
+ddgs
