@@ -1,20 +1,25 @@
-# 1. Usamos una imagen oficial de Python ligera para optimizar el peso
 FROM python:3.11-slim
 
-# 2. Establecemos el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# 3. Copiamos el archivo de requerimientos primero (aprovecha la caché de Docker)
+# Instalar dependencias del sistema necesarias para PostgreSQL y otros
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    postgresql-client \
+    curl \
+    netcat-openbsd \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements
 COPY requirements.txt .
 
-# 4. Instalamos las dependencias
+# Instalar dependencias de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Copiamos el resto del código (main.py)
-COPY src/ ./src/
+# Copiar el código de la aplicación
+COPY . .
 
-# 6. Definimos variables de entorno útiles para producción
-ENV PYTHONUNBUFFERED=1 
-
-# 7. Comando para arrancar el sistema multi-agente
-CMD ["python", "src/main.py"]
+# El comando se especifica en docker-compose.yml
+CMD ["tail", "-f", "/dev/null"]

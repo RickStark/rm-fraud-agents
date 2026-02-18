@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Servicio 1: El motor del LLM Local (Ollama)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: local_llm_server
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama # Persiste los modelos descargados
+    restart: always
+
+  # Servicio 2: Tu sistema Multi-Agente (CrewAI)
+  fraud-agents:
+    build: .
+    container_name: crewai_fraud_detector
+    depends_on:
+      - ollama
+    environment:
+      # Apunta a la URL interna del contenedor de Ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OPENAI_API_KEY=NA 
+    volumes:
+      - .:/app
+    # Mantiene el contenedor vivo para poder ejecutar scripts manualmente
+    command: tail -f /dev/null 
+
+volumes:
+  ollama_models:

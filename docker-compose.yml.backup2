@@ -1,6 +1,9 @@
 version: '3.8'
 
 services:
+  # ==========================================
+  # ZOOKEEPER - Requerido por Kafka
+  # ==========================================
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
@@ -17,6 +20,9 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==========================================
+  # KAFKA - Sistema de mensajería
+  # ==========================================
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
@@ -42,6 +48,9 @@ services:
       timeout: 10s
       retries: 5
 
+  # ==========================================
+  # KAFKA UI - Interfaz web para Kafka
+  # ==========================================
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -56,6 +65,9 @@ services:
     networks:
       - fraud-network
 
+  # ==========================================
+  # POSTGRESQL - Base de datos
+  # ==========================================
   postgres:
     image: postgres:15-alpine
     container_name: postgres-fraud
@@ -76,6 +88,9 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==========================================
+  # ADMINER - Interfaz web para PostgreSQL
+  # ==========================================
   adminer:
     image: adminer:latest
     container_name: adminer
@@ -87,7 +102,7 @@ services:
       - fraud-network
 
   # ==========================================
-  # OLLAMA con GPU NVIDIA ✅
+  # OLLAMA - Motor del LLM Local (YA EXISTENTE)
   # ==========================================
   ollama:
     image: ollama/ollama:latest
@@ -99,20 +114,15 @@ services:
     networks:
       - fraud-network
     restart: always
-    # --- NVIDIA GPU ---
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all           # Usa todas las GPUs disponibles (o pon "1")
-              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 30s
       timeout: 10s
       retries: 3
 
+  # ==========================================
+  # FRAUD AGENTS - Tu sistema Multi-Agente (ACTUALIZADO)
+  # ==========================================
   fraud-agents:
     build: .
     container_name: crewai_fraud_detector
@@ -124,11 +134,14 @@ services:
       ollama:
         condition: service_started
     environment:
+      # Configuración de Ollama
       - OLLAMA_BASE_URL=http://ollama:11434
       - OPENAI_API_KEY=NA
+      # Configuración de Kafka
       - KAFKA_BROKER=kafka:9092
       - KAFKA_TOPIC=transactions
       - KAFKA_GROUP_ID=fraud-detection-group
+      # Configuración de PostgreSQL
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=fraud_detection
@@ -138,9 +151,13 @@ services:
       - .:/app
     networks:
       - fraud-network
+    # Ahora ejecuta el script de detección de fraude
     command: python src/main.py
     restart: unless-stopped
 
+  # ==========================================
+  # TRANSACTION PRODUCER - Simulador de transacciones (NUEVO)
+  # ==========================================
   transaction-producer:
     build:
       context: .
