@@ -36,6 +36,16 @@ CREATE TABLE IF NOT EXISTS fraud_analysis_results (
     FOREIGN KEY (tx_id) REFERENCES transactions(tx_id)
 );
 
+-- Tabla de metricas
+CREATE TABLE IF NOT EXISTS  agent_metrics (
+    id SERIAL PRIMARY KEY,
+    tx_id VARCHAR(50),
+    elapsed_seconds FLOAT,
+    total_tokens INT,
+    decision VARCHAR(20),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Índices para mejorar el rendimiento
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions(timestamp);

@@ -8,3 +8,8 @@ ddgs
 kafka-python==2.0.2
 psycopg2-binary==2.9.9
 python-dotenv>=1.0.0
+
+# Para que CrewAI se conecte a vLLM via API OpenAI
+openai>=1.0.0
+arize-phoenix==13.3.0
+openinference-instrumentation-crewai==0.1.18

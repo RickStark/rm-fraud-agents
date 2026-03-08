@@ -29,21 +29,19 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9093
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
     networks:
       - fraud-network
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1 || exit 1"]
-      interval: 15s
+      test: ["CMD-SHELL", "nc -z localhost 9092"]
+      interval: 10s
       timeout: 10s
-      retries: 10
-      start_period: 30s  # ← Dale tiempo antes de empezar a chequear
+      retries: 5
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -87,62 +85,68 @@ services:
       - "8081:8080"
     networks:
       - fraud-network
-  phoenix:
-    image: arizephoenix/phoenix:latest
-    container_name: phoenix
-    ports:
-      - "6006:6006"
-    volumes:
-      - phoenix-data:/root/.phoenix  # ← persiste trazas
-    networks:
-      - fraud-network
-
-
 
   # ==========================================
-  # OLLAMA con GPU NVIDIA ✅
+  # vLLM - Backend LLM rápido con GPU
   # ==========================================
-  ollama:
-    image: ollama/ollama:latest
-    container_name: local_llm_server
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm_server
     ports:
-      - "11434:11434"
+      - "8000:8000"
     volumes:
-      - ollama_models:/root/.ollama
+      - vllm_models:/root/.cache/huggingface
     networks:
       - fraud-network
-    restart: always
-
-    environment:
-    - NVIDIA_VISIBLE_DEVICES=all
-    - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    - OLLAMA_MAX_LOADED_MODELS=1
-    - OLLAMA_NUM_PARALLEL=1
-    - OLLAMA_CONTEXT_LENGTH=1024
-    # --- NVIDIA GPU ---
+    # GPU NVIDIA
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: all           # Usa todas las GPUs disponibles (o pon "1")
+              count: 1
               capabilities: [gpu]
+    # Configuración optimizada para GTX 5060 (8GB)
+    command: >
+      --model microsoft/Phi-3-mini-4k-instruct
+      --dtype float16
+      --max-model-len 50
+      --gpu-memory-utilization 0.80
+      --max-num-seqs 1
+    environment:
+      - VLLM_USE_V1=0
+      - VLLM_ATTENTION_BACKEND=XFORMERS
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 240s
+    restart: unless-stopped
 
+  # ==========================================
+  # FRAUD AGENTS - CrewAI con vLLM backend
+  # ==========================================
   fraud-agents:
     build: .
     container_name: crewai_fraud_detector
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      vllm:
+        condition: service_healthy
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=qwen2.5:7b
-      - OPENAI_API_KEY=NA
+      # vLLM configuration (CrewAI lo usa via API OpenAI)
+      - VLLM_BASE_URL=http://vllm:8000/v1
+      - VLLM_MODEL=microsoft/Phi-3-mini-4k-instruct
+      - LITELLM_DROP_SYSTEM_MESSAGES=true
+      # Kafka
       - KAFKA_BROKER=kafka:9092
       - KAFKA_TOPIC=transactions
       - KAFKA_GROUP_ID=fraud-detection-group
+      # PostgreSQL
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=fraud_detection
@@ -152,16 +156,11 @@ services:
       - .:/app
     networks:
       - fraud-network
-    command: python src/main.py
-    restart: on-failure
-    depends_on:
-      kafka:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-
+    command: python src/fraud_detection_crewai_vllm.py
+    restart: unless-stopped
+  # ==========================================
+  # TRANSACTION PRODUCER
+  # ==========================================
   transaction-producer:
     build:
       context: .
@@ -191,6 +190,5 @@ networks:
     driver: bridge
 
 volumes:
-  ollama_models:
+  vllm_models:
   postgres-data:
-  phoenix-data:
