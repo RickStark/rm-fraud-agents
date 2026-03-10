@@ -204,7 +204,7 @@ agent_metrics (tx_id, elapsed_seconds, total_tokens, decision, created_at)
 
 ## 📦 Tech Stack
 
-- **Agents:** CrewAI >=0.28.8
+- **Agents:** CrewAI >=1.9.0
 - **Local LLM:** Ollama + qwen2.5:7b
 - **Streaming:** Apache Kafka 7.5.0
 - **Database:** PostgreSQL 15
